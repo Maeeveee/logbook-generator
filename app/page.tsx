@@ -95,7 +95,6 @@ export default function Page() {
     let loadedWeeks = getSavedWeeks();
     // Inisialisasi minggu-minggu untuk bulan September 2026 jika belum ada
     loadedWeeks = initWeeksForMonth(initialMonth, loadedWeeks);
-    saveWeeks(loadedWeeks);
 
     const savedActiveId = getSavedActiveWeekId();
     let activeWeek = loadedWeeks.find((w) => w.id === savedActiveId);
@@ -122,18 +121,30 @@ export default function Page() {
     setIsLoaded(true);
   }, []);
 
-  // Simpan data diri ke localStorage setiap kali ada perubahan
+  // Debounced auto-save (350ms): Menghindari freeze / I/O disk berat pada setiap ketikan huruf
   useEffect(() => {
     if (!isLoaded) return;
-    saveProfile({
-      nama: data.nama,
-      nim: data.nim,
-      programStudi: data.programStudi,
-      namaMitra: data.namaMitra,
-      namaPembimbing: data.namaPembimbing,
-      namaMentor: data.namaMentor,
-      ttdMahasiswa: data.ttdMahasiswa,
-    });
+
+    const timer = setTimeout(() => {
+      saveProfile({
+        nama: data.nama,
+        nim: data.nim,
+        programStudi: data.programStudi,
+        namaMitra: data.namaMitra,
+        namaPembimbing: data.namaPembimbing,
+        namaMentor: data.namaMentor,
+        ttdMahasiswa: data.ttdMahasiswa,
+      });
+
+      if (weeks.length > 0) {
+        saveWeeks(weeks, activeWeekId);
+      }
+      if (activeWeekId) {
+        saveActiveWeekId(activeWeekId);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
   }, [
     isLoaded,
     data.nama,
@@ -143,19 +154,32 @@ export default function Page() {
     data.namaPembimbing,
     data.namaMentor,
     data.ttdMahasiswa,
+    weeks,
+    activeWeekId,
   ]);
 
-  // Simpan daftar minggu ke localStorage jika ada perubahan
+  // Jaminan data tetap tersimpan saat tab browser ditutup atau di-refresh
   useEffect(() => {
-    if (!isLoaded || weeks.length === 0) return;
-    saveWeeks(weeks);
-  }, [isLoaded, weeks]);
-
-  // Simpan activeWeekId ke localStorage jika ada perubahan
-  useEffect(() => {
-    if (!isLoaded || !activeWeekId) return;
-    saveActiveWeekId(activeWeekId);
-  }, [isLoaded, activeWeekId]);
+    const handleBeforeUnload = () => {
+      saveProfile({
+        nama: data.nama,
+        nim: data.nim,
+        programStudi: data.programStudi,
+        namaMitra: data.namaMitra,
+        namaPembimbing: data.namaPembimbing,
+        namaMentor: data.namaMentor,
+        ttdMahasiswa: data.ttdMahasiswa,
+      });
+      if (weeks.length > 0) {
+        saveWeeks(weeks, activeWeekId);
+      }
+      if (activeWeekId) {
+        saveActiveWeekId(activeWeekId);
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [data, weeks, activeWeekId]);
 
   const filename = useMemo(
     () => logbookFilename(data.nama || data.namaMahasiswa, data.weekNumber),
