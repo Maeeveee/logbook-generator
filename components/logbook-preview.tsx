@@ -13,10 +13,10 @@ export function LogbookPreview({ data }: { data: LogbookData }) {
           { id: "empty", hariTanggal: "", jamMasuk: "", jamPulang: "", kegiatan: "" },
         ];
   const padded =
-    displayRows.length < 7
+    displayRows.length < 5
       ? [
           ...displayRows,
-          ...Array.from({ length: 7 - displayRows.length }, (_, i) => ({
+          ...Array.from({ length: 5 - displayRows.length }, (_, i) => ({
             id: `pad-${i}`,
             hariTanggal: "",
             jamMasuk: "",
@@ -33,8 +33,11 @@ export function LogbookPreview({ data }: { data: LogbookData }) {
   return (
     <div
       id="logbook-paper"
-      className="w-full max-w-[794px] bg-white px-8 py-8 font-serif text-[12px] leading-normal text-black shadow-xl sm:px-12"
-      style={{ minHeight: "1123px" }}
+      className="w-full max-w-[794px] bg-white px-8 py-8 text-[12px] leading-normal text-black shadow-xl sm:px-12"
+      style={{
+        fontFamily: '"Times New Roman", Times, serif',
+        minHeight: "1123px",
+      }}
     >
       {/* Kop Surat (1 logo di kiri, teks di tengah) */}
       <div className="relative flex items-center justify-center pb-2">

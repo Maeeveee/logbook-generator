@@ -2,22 +2,28 @@
 
 import { useState } from "react";
 import {
-  CheckCircle2,
+  Calendar,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Layers,
   List,
   Plus,
+  Sparkles,
   Trash2,
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmModal } from "@/components/confirm-modal";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createActivity,
+  generateWorkdayDates,
+  getNextDateFrom,
+  parseIndonesianDate,
   resizeImageToDataURL,
   type LogbookData,
 } from "@/lib/logbook";
@@ -26,11 +32,19 @@ import { cn } from "@/lib/utils";
 interface Props {
   data: LogbookData;
   onChange: (data: LogbookData) => void;
+  onOpenImport?: () => void;
 }
 
-export function LogbookForm({ data, onChange }: Props) {
+export const PRODI_OPTIONS = [
+  "Sarjana Terapan Teknik Informatika",
+  "Sarjana Terapan Sistem Informasi Bisnis",
+] as const;
+
+export function LogbookForm({ data, onChange, onOpenImport }: Props) {
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"tab" | "list">("tab");
+  const [confirmDeleteTtdOpen, setConfirmDeleteTtdOpen] = useState(false);
+  const [confirmDeleteRowId, setConfirmDeleteRowId] = useState<string | null>(null);
 
   const set = (patch: Partial<LogbookData>) => onChange({ ...data, ...patch });
 
@@ -53,8 +67,107 @@ export function LogbookForm({ data, onChange }: Props) {
 
   const currentActivity = data.activities[safeActiveIndex];
 
+  // Set start date and automatically generate dates for all activities
+  const handleStartDateChange = (startDateStr: string) => {
+    const parsed = parseIndonesianDate(startDateStr);
+    if (!parsed) return;
+    const generated = generateWorkdayDates(parsed, data.activities.length);
+    onChange({
+      ...data,
+      activities: data.activities.map((act, idx) => ({
+        ...act,
+        hariTanggal: generated[idx] || act.hariTanggal,
+      })),
+    });
+  };
+
+  // Set default jam masuk for all activities
+  const handleSetAllJamMasuk = (time: string) => {
+    onChange({
+      ...data,
+      activities: data.activities.map((act) => ({
+        ...act,
+        jamMasuk: time,
+      })),
+    });
+  };
+
+  // Set default jam pulang for all activities
+  const handleSetAllJamPulang = (time: string) => {
+    onChange({
+      ...data,
+      activities: data.activities.map((act) => ({
+        ...act,
+        jamPulang: time,
+      })),
+    });
+  };
+
+  const handleRowDateChange = (idx: number, val: string) => {
+    if (idx === 0) {
+      const parsed = parseIndonesianDate(val);
+      if (parsed) {
+        const generated = generateWorkdayDates(parsed, data.activities.length);
+        onChange({
+          ...data,
+          activities: data.activities.map((act, i) => {
+            if (i === 0) return { ...act, hariTanggal: val };
+            if (!act.hariTanggal) return { ...act, hariTanggal: generated[i] };
+            return act;
+          }),
+        });
+        return;
+      }
+    }
+    updateActivity(data.activities[idx].id, { hariTanggal: val });
+  };
+
+  const handleRowJamMasukChange = (idx: number, val: string) => {
+    if (idx === 0) {
+      const prevVal = data.activities[0]?.jamMasuk || "";
+      onChange({
+        ...data,
+        activities: data.activities.map((act, i) => {
+          if (i === 0) return { ...act, jamMasuk: val };
+          if (!act.jamMasuk || act.jamMasuk === prevVal) {
+            return { ...act, jamMasuk: val };
+          }
+          return act;
+        }),
+      });
+    } else {
+      updateActivity(data.activities[idx].id, { jamMasuk: val });
+    }
+  };
+
+  const handleRowJamPulangChange = (idx: number, val: string) => {
+    if (idx === 0) {
+      const prevVal = data.activities[0]?.jamPulang || "";
+      onChange({
+        ...data,
+        activities: data.activities.map((act, i) => {
+          if (i === 0) return { ...act, jamPulang: val };
+          if (!act.jamPulang || act.jamPulang === prevVal) {
+            return { ...act, jamPulang: val };
+          }
+          return act;
+        }),
+      });
+    } else {
+      updateActivity(data.activities[idx].id, { jamPulang: val });
+    }
+  };
+
   const handleAddActivity = () => {
     const newAct = createActivity();
+    if (data.activities.length > 0) {
+      const lastAct = data.activities[data.activities.length - 1];
+      if (lastAct.hariTanggal) {
+        newAct.hariTanggal = getNextDateFrom(lastAct.hariTanggal);
+      }
+      newAct.jamMasuk = lastAct.jamMasuk || data.activities[0]?.jamMasuk || "";
+      newAct.jamPulang = lastAct.jamPulang || data.activities[0]?.jamPulang || "";
+    }
     onChange({
       ...data,
       activities: [...data.activities, newAct],
@@ -75,21 +188,12 @@ export function LogbookForm({ data, onChange }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Identitas & Pembimbing (Disimpan otomatis di LocalStorage) */}
+      {/* Identitas & Pembimbing */}
       <Card className="border-primary/20 shadow-sm">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold">
-              Data Diri & Pembimbing
-            </CardTitle>
-            <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="size-3.5" />
-              Tersimpan di browser
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Data ini otomatis tersimpan di Local Storage dan dipakai pada identitas serta lembar tanda tangan.
-          </p>
+          <CardTitle className="text-base font-semibold">
+            Data Diri & Pembimbing
+          </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3">
           <div className="grid gap-1.5">
@@ -121,17 +225,40 @@ export function LogbookForm({ data, onChange }: Props) {
               <Label htmlFor="prodi" className="text-xs font-semibold">
                 Program Studi
               </Label>
-              <Input
-                id="prodi"
-                placeholder="cth. D4 Teknik Informatika"
-                value={data.programStudi}
-                onChange={(e) => set({ programStudi: e.target.value })}
-              />
+              <div className="relative">
+                <select
+                  id="prodi"
+                  value={data.programStudi}
+                  onChange={(e) => set({ programStudi: e.target.value })}
+                  className="h-9 w-full min-w-0 cursor-pointer appearance-none rounded-4xl border border-input bg-input/30 px-3 py-1 pr-8 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="" disabled className="bg-popover text-muted-foreground">
+                    Pilih Program Studi
+                  </option>
+                  {PRODI_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt} className="bg-popover text-foreground">
+                      {opt}
+                    </option>
+                  ))}
+                  {data.programStudi &&
+                    !PRODI_OPTIONS.includes(
+                      data.programStudi as (typeof PRODI_OPTIONS)[number],
+                    ) && (
+                      <option
+                        value={data.programStudi}
+                        className="bg-popover text-foreground"
+                      >
+                        {data.programStudi}
+                      </option>
+                    )}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              </div>
             </div>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="mitra" className="text-xs font-semibold">
-              Nama Mitra Industri
+              Mitra Industri
             </Label>
             <Input
               id="mitra"
@@ -154,7 +281,7 @@ export function LogbookForm({ data, onChange }: Props) {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="mentor" className="text-xs font-semibold">
-                Pembimbing Lapangan / Mentor
+                Mentor Lapangan
               </Label>
               <Input
                 id="mentor"
@@ -165,14 +292,11 @@ export function LogbookForm({ data, onChange }: Props) {
             </div>
           </div>
 
-          {/* Upload Tanda Tangan Mahasiswa */}
+          {/* Upload Tanda Tangan */}
           <div className="mt-1 border-t pt-3">
             <Label className="text-xs font-semibold">
-              Tanda Tangan Mahasiswa (Gambar)
+              Tanda Tangan (TTD)
             </Label>
-            <p className="mb-2 text-[11px] text-muted-foreground">
-              Unggah gambar tanda tangan (format PNG/JPG, disarankan transparan). Otomatis tersimpan dan ditempel pada dokumen.
-            </p>
 
             {data.ttdMahasiswa ? (
               <div className="flex flex-wrap items-center gap-3">
@@ -196,7 +320,7 @@ export function LogbookForm({ data, onChange }: Props) {
                     variant="ghost"
                     size="sm"
                     className="h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => set({ ttdMahasiswa: "" })}
+                    onClick={() => setConfirmDeleteTtdOpen(true)}
                   >
                     <Trash2 className="mr-1 size-3.5" /> Hapus TTD
                   </Button>
@@ -244,39 +368,113 @@ export function LogbookForm({ data, onChange }: Props) {
               <CardTitle className="text-base font-semibold">
                 Kegiatan Harian
               </CardTitle>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                {data.activities.length} baris
-              </span>
             </div>
-            <div className="flex items-center rounded-md border bg-muted/40 p-0.5 text-xs">
-              <button
-                type="button"
-                onClick={() => setViewMode("tab")}
-                className={cn(
-                  "flex items-center gap-1 rounded px-2.5 py-1 font-medium transition-colors",
-                  viewMode === "tab"
-                    ? "bg-background text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Layers className="size-3.5" /> Tab Fokus
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className={cn(
-                  "flex items-center gap-1 rounded px-2.5 py-1 font-medium transition-colors",
-                  viewMode === "list"
-                    ? "bg-background text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <List className="size-3.5" /> Tampilkan Semua
-              </button>
+            <div className="flex items-center gap-2">
+              {onOpenImport && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={onOpenImport}
+                  className="h-7 gap-1 border-primary/30 text-xs font-medium text-primary hover:bg-primary/10"
+                  title="Import file .txt, CSV, atau teks catatan"
+                >
+                  <Sparkles className="size-3" /> Import
+                </Button>
+              )}
+              <div className="flex items-center rounded-md border bg-muted/40 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("tab")}
+                  className={cn(
+                    "flex items-center gap-1 rounded px-2.5 py-1 font-medium transition-colors",
+                    viewMode === "tab"
+                      ? "bg-background text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Layers className="size-3.5" /> Tab Fokus
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  className={cn(
+                    "flex items-center gap-1 rounded px-2.5 py-1 font-medium transition-colors",
+                    viewMode === "list"
+                      ? "bg-background text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <List className="size-3.5" /> Tampilkan Semua
+                </button>
+              </div>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3.5">
+          {/* Bar Pengaturan Cepat Jadwal (Senin – Jumat) */}
+          <div className="rounded-lg border border-primary/25 bg-primary/5 p-2.5 text-xs">
+            <div className="mb-2 flex items-center gap-1.5 font-semibold text-foreground">
+              <Calendar className="size-3.5 text-primary" />
+              <span>Jadwal Kerja (Senin – Jumat)</span>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-1">
+                <Label
+                  htmlFor="quick-start-date"
+                  className="text-[11px] font-medium text-foreground"
+                >
+                  Tanggal Mulai
+                </Label>
+                <Input
+                  id="quick-start-date"
+                  type="date"
+                  className="h-8 bg-background text-xs"
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleStartDateChange(e.target.value);
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="grid gap-1">
+                <Label
+                  htmlFor="quick-jam-masuk"
+                  className="text-[11px] font-medium text-foreground"
+                >
+                  Jam Masuk
+                </Label>
+                <Input
+                  id="quick-jam-masuk"
+                  type="time"
+                  className="h-8 bg-background text-xs"
+                  value={data.activities[0]?.jamMasuk || ""}
+                  onChange={(e) => handleSetAllJamMasuk(e.target.value)}
+                  placeholder="08:00"
+                />
+              </div>
+
+              <div className="grid gap-1">
+                <Label
+                  htmlFor="quick-jam-pulang"
+                  className="text-[11px] font-medium text-foreground"
+                >
+                  Jam Pulang
+                </Label>
+                <Input
+                  id="quick-jam-pulang"
+                  type="time"
+                  className="h-8 bg-background text-xs"
+                  value={data.activities[0]?.jamPulang || ""}
+                  onChange={(e) => handleSetAllJamPulang(e.target.value)}
+                  placeholder="17:00"
+                />
+              </div>
+            </div>
+          </div>
+
           {viewMode === "tab" ? (
             /* Mode 1: Tab Baris Ringkas (Tinggi tetap ~220px, hemat tempat) */
             <div className="flex flex-col gap-3">
@@ -311,7 +509,7 @@ export function LogbookForm({ data, onChange }: Props) {
                   variant="outline"
                   size="icon-sm"
                   className="h-8 w-8 shrink-0 border-dashed"
-                  title="Tambah baris kegiatan"
+                  title="Tambah baris kegiatan (opsional)"
                   onClick={handleAddActivity}
                 >
                   <Plus className="size-3.5" />
@@ -323,7 +521,7 @@ export function LogbookForm({ data, onChange }: Props) {
                 <div className="rounded-lg border bg-card/60 p-3.5 shadow-2xs">
                   <div className="mb-3 flex items-center justify-between border-b pb-2">
                     <span className="text-xs font-semibold text-foreground">
-                      Mengisi Baris ke-{safeActiveIndex + 1} dari{" "}
+                      Baris ke-{safeActiveIndex + 1} dari{" "}
                       {data.activities.length}
                     </span>
                     <Button
@@ -332,7 +530,7 @@ export function LogbookForm({ data, onChange }: Props) {
                       size="sm"
                       className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive px-2"
                       disabled={data.activities.length <= 1}
-                      onClick={() => handleDeleteActivity(currentActivity.id)}
+                      onClick={() => setConfirmDeleteRowId(currentActivity.id)}
                     >
                       <Trash2 className="mr-1 size-3.5" /> Hapus Baris Ini
                     </Button>
@@ -343,15 +541,36 @@ export function LogbookForm({ data, onChange }: Props) {
                       <Label className="text-[11px] text-muted-foreground">
                         Hari, Tanggal
                       </Label>
-                      <Input
-                        placeholder="Senin, 01/09/2026"
-                        value={currentActivity.hariTanggal}
-                        onChange={(e) =>
-                          updateActivity(currentActivity.id, {
-                            hariTanggal: e.target.value,
-                          })
-                        }
-                      />
+                      <div className="flex gap-1.5">
+                        <Input
+                          placeholder="Senin, 01/09/2026"
+                          value={currentActivity.hariTanggal}
+                          onChange={(e) =>
+                            handleRowDateChange(safeActiveIndex, e.target.value)
+                          }
+                        />
+                        {safeActiveIndex === 0 && (
+                          <div className="relative shrink-0">
+                            <Input
+                              type="date"
+                              id="tab-date-picker-0"
+                              className="sr-only"
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleStartDateChange(e.target.value);
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor="tab-date-picker-0"
+                              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border bg-background text-muted-foreground shadow-2xs hover:bg-muted hover:text-foreground"
+                              title="Pilih tanggal dari kalender untuk mengisi seluruh hari"
+                            >
+                              <Calendar className="size-4" />
+                            </label>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="grid gap-1">
                       <Label className="text-[11px] text-muted-foreground">
@@ -361,9 +580,10 @@ export function LogbookForm({ data, onChange }: Props) {
                         type="time"
                         value={currentActivity.jamMasuk}
                         onChange={(e) =>
-                          updateActivity(currentActivity.id, {
-                            jamMasuk: e.target.value,
-                          })
+                          handleRowJamMasukChange(
+                            safeActiveIndex,
+                            e.target.value,
+                          )
                         }
                       />
                     </div>
@@ -375,9 +595,10 @@ export function LogbookForm({ data, onChange }: Props) {
                         type="time"
                         value={currentActivity.jamPulang}
                         onChange={(e) =>
-                          updateActivity(currentActivity.id, {
-                            jamPulang: e.target.value,
-                          })
+                          handleRowJamPulangChange(
+                            safeActiveIndex,
+                            e.target.value,
+                          )
                         }
                       />
                     </div>
@@ -413,6 +634,9 @@ export function LogbookForm({ data, onChange }: Props) {
                     >
                       <ChevronLeft className="mr-1 size-3.5" /> Baris Sebelumnya
                     </Button>
+                    <span className="text-[11px] text-muted-foreground">
+                      {safeActiveIndex + 1} / {data.activities.length}
+                    </span>
                     <Button
                       type="button"
                       variant="outline"
@@ -449,7 +673,7 @@ export function LogbookForm({ data, onChange }: Props) {
                         size="icon-sm"
                         aria-label={`Hapus baris ${i + 1}`}
                         disabled={data.activities.length <= 1}
-                        onClick={() => handleDeleteActivity(a.id)}
+                        onClick={() => setConfirmDeleteRowId(a.id)}
                       >
                         <Trash2 className="size-3.5 text-destructive/80 hover:text-destructive" />
                       </Button>
@@ -459,15 +683,36 @@ export function LogbookForm({ data, onChange }: Props) {
                         <Label className="text-[11px] text-muted-foreground">
                           Hari, Tanggal
                         </Label>
-                        <Input
-                          placeholder="Senin, 01/09/2026"
-                          value={a.hariTanggal}
-                          onChange={(e) =>
-                            updateActivity(a.id, {
-                              hariTanggal: e.target.value,
-                            })
-                          }
-                        />
+                        <div className="flex gap-1.5">
+                          <Input
+                            placeholder="Senin, 01/09/2026"
+                            value={a.hariTanggal}
+                            onChange={(e) =>
+                              handleRowDateChange(i, e.target.value)
+                            }
+                          />
+                          {i === 0 && (
+                            <div className="relative shrink-0">
+                              <Input
+                                type="date"
+                                id="list-date-picker-0"
+                                className="sr-only"
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    handleStartDateChange(e.target.value);
+                                  }
+                                }}
+                              />
+                              <label
+                                htmlFor="list-date-picker-0"
+                                className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border bg-background text-muted-foreground shadow-2xs hover:bg-muted hover:text-foreground"
+                                title="Pilih tanggal dari kalender untuk mengisi seluruh hari"
+                              >
+                                <Calendar className="size-4" />
+                              </label>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="grid gap-1">
                         <Label className="text-[11px] text-muted-foreground">
@@ -477,9 +722,7 @@ export function LogbookForm({ data, onChange }: Props) {
                           type="time"
                           value={a.jamMasuk}
                           onChange={(e) =>
-                            updateActivity(a.id, {
-                              jamMasuk: e.target.value,
-                            })
+                            handleRowJamMasukChange(i, e.target.value)
                           }
                         />
                       </div>
@@ -491,9 +734,7 @@ export function LogbookForm({ data, onChange }: Props) {
                           type="time"
                           value={a.jamPulang}
                           onChange={(e) =>
-                            updateActivity(a.id, {
-                              jamPulang: e.target.value,
-                            })
+                            handleRowJamPulangChange(i, e.target.value)
                           }
                         />
                       </div>
@@ -519,12 +760,39 @@ export function LogbookForm({ data, onChange }: Props) {
                 className="mt-1 border-dashed"
                 onClick={handleAddActivity}
               >
-                <Plus className="size-4" /> Tambah baris kegiatan
+                <Plus className="size-4" /> Tambah baris kegiatan (opsional)
               </Button>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Modal Konfirmasi: Hapus TTD */}
+      <ConfirmModal
+        isOpen={confirmDeleteTtdOpen}
+        onClose={() => setConfirmDeleteTtdOpen(false)}
+        onConfirm={() => set({ ttdMahasiswa: "" })}
+        title="Hapus Tanda Tangan?"
+        description="Gambar tanda tangan mahasiswa yang tersimpan akan dihapus dari dokumen ini."
+        confirmLabel="Ya, Hapus TTD"
+        variant="destructive"
+      />
+
+      {/* Modal Konfirmasi: Hapus Baris Kegiatan */}
+      <ConfirmModal
+        isOpen={Boolean(confirmDeleteRowId)}
+        onClose={() => setConfirmDeleteRowId(null)}
+        onConfirm={() => {
+          if (confirmDeleteRowId) {
+            handleDeleteActivity(confirmDeleteRowId);
+            setConfirmDeleteRowId(null);
+          }
+        }}
+        title="Hapus Baris Kegiatan?"
+        description="Baris kegiatan beserta tanggal, jam, dan deskripsi kegiatan ini akan dihapus dari logbook."
+        confirmLabel="Ya, Hapus Baris"
+        variant="destructive"
+      />
     </div>
   );
 }

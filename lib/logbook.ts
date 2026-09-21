@@ -109,10 +109,68 @@ export function defaultLogbook(profile?: Partial<LogbookProfile>): LogbookData {
     namaPembimbing: profile?.namaPembimbing || "",
     namaMentor: profile?.namaMentor || "",
     ttdMahasiswa: profile?.ttdMahasiswa || "",
-    activities: Array.from({ length: 7 }, () => createActivity()),
+    activities: Array.from({ length: 5 }, () => createActivity()),
   };
 }
 
+export const NAMA_HARI_ID = [
+  "Minggu",
+  "Senin",
+  "Selasa",
+  "Rabu",
+  "Kamis",
+  "Jumat",
+  "Sabtu",
+] as const;
+
+export function formatDateToIndonesian(date: Date): string {
+  const dayName = NAMA_HARI_ID[date.getDay()];
+  const d = String(date.getDate()).padStart(2, "0");
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const y = date.getFullYear();
+  return `${dayName}, ${d}/${m}/${y}`;
+}
+
+export function parseIndonesianDate(str: string): Date | null {
+  if (!str) return null;
+  const trimmed = str.trim();
+
+  // 1. YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split("-").map(Number);
+    const date = new Date(y, m - 1, d);
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  // 2. Contains DD/MM/YYYY or DD-MM-YYYY
+  const match = trimmed.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (match) {
+    const d = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const y = parseInt(match[3], 10);
+    const date = new Date(y, m - 1, d);
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  return null;
+}
+
+export function generateWorkdayDates(startDate: Date, count = 5): string[] {
+  const results: string[] = [];
+  const curr = new Date(startDate);
+  for (let i = 0; i < count; i++) {
+    results.push(formatDateToIndonesian(curr));
+    curr.setDate(curr.getDate() + 1);
+  }
+  return results;
+}
+
+export function getNextDateFrom(dateStr: string): string {
+  const parsed = parseIndonesianDate(dateStr);
+  if (!parsed) return "";
+  parsed.setDate(parsed.getDate() + 1);
+  return formatDateToIndonesian(parsed);
+}
 
 export function slugifyName(name: string): string {
   const slug = name
@@ -136,4 +194,5 @@ export function todayISODate(d = new Date()): string {
 export function logbookFilename(nama: string, d = new Date()): string {
   return `logbook-${slugifyName(nama)}-${todayISODate(d)}.pdf`;
 }
+
 

@@ -121,7 +121,9 @@ export async function exportLogbookPdf(data: LogbookData): Promise<string> {
     a.jamPulang,
     a.kegiatan,
   ]);
-  while (body.length < 7) body.push(["", "", "", ""]);
+  while (body.length < Math.max(5, data.activities.length)) {
+    body.push(["", "", "", ""]);
+  }
 
   autoTable(doc, {
     startY: y,

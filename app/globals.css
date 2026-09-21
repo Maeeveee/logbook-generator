@@ -130,3 +130,8 @@
     @apply font-sans;
     }
 }
+
+#logbook-paper,
+#logbook-paper * {
+  font-family: "Times New Roman", Times, serif !important;
+}
