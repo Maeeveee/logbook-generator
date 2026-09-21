@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpenText, ChevronDown, Download, RotateCcw, Trash2 } from "lucide-react";
+import {
+  BookOpenText,
+  CalendarRange,
+  ChevronDown,
+  Download,
+  FileText,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { LogbookForm } from "@/components/logbook-form";
@@ -20,6 +28,7 @@ import {
   getWorkdaysForMonthWeek,
   initWeeksForMonth,
   logbookFilename,
+  monthlyLogbookFilename,
   saveActiveWeekId,
   saveProfile,
   saveWeeks,
@@ -28,35 +37,45 @@ import {
   type LogbookData,
   type LogbookWeek,
 } from "@/lib/logbook";
-import { exportLogbookPdf } from "@/lib/logbook-pdf";
+import { exportLogbookPdf, exportMonthlyLogbookPdf } from "@/lib/logbook-pdf";
 
 export default function Page() {
   const [data, setData] = useState(defaultLogbook);
   const [weeks, setWeeks] = useState<LogbookWeek[]>([]);
   const [activeWeekId, setActiveWeekId] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>("2026-09");
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"week" | "month" | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [confirmResetKegiatanOpen, setConfirmResetKegiatanOpen] = useState(false);
   const [confirmResetSemuaOpen, setConfirmResetSemuaOpen] = useState(false);
   const [isResetMenuOpen, setIsResetMenuOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const resetMenuRef = useRef<HTMLDivElement>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  // Tutup dropdown reset jika klik di luar
+  // Tutup dropdown reset & export jika klik di luar
   useEffect(() => {
-    if (!isResetMenuOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
       if (
+        isResetMenuOpen &&
         resetMenuRef.current &&
-        !resetMenuRef.current.contains(e.target as Node)
+        !resetMenuRef.current.contains(target)
       ) {
         setIsResetMenuOpen(false);
+      }
+      if (
+        isExportMenuOpen &&
+        exportMenuRef.current &&
+        !exportMenuRef.current.contains(target)
+      ) {
+        setIsExportMenuOpen(false);
       }
     };
     window.addEventListener("mousedown", handleClickOutside);
     return () => window.removeEventListener("mousedown", handleClickOutside);
-  }, [isResetMenuOpen]);
+  }, [isResetMenuOpen, isExportMenuOpen]);
 
   // Muat data profil tersimpan dan inisialisasi minggu-minggu otomatis dari localStorage
   useEffect(() => {
@@ -143,12 +162,28 @@ export default function Page() {
     [data.nama, data.namaMahasiswa, data.weekNumber],
   );
 
-  const handleExport = async () => {
-    setExporting(true);
+  const handleExportWeek = async () => {
+    setExporting("week");
     try {
       await exportLogbookPdf(data);
     } finally {
-      setExporting(false);
+      setExporting(null);
+    }
+  };
+
+  const handleExportMonth = async () => {
+    setExporting("month");
+    try {
+      // Pastikan kegiatan aktif minggu saat ini tersinkronisasi ke daftar monthWeeks
+      const currentMonthWeeks = weeks
+        .filter((w) => w.month === selectedMonth)
+        .map((w) =>
+          w.id === activeWeekId ? { ...w, activities: data.activities } : w,
+        );
+
+      await exportMonthlyLogbookPdf(data, currentMonthWeeks, selectedMonth);
+    } finally {
+      setExporting(null);
     }
   };
 
@@ -371,16 +406,69 @@ export default function Page() {
               )}
             </div>
 
-            {/* Aksi Utama: Export PDF */}
-            <Button
-              size="sm"
-              onClick={handleExport}
-              disabled={exporting}
-              className="font-semibold shadow-xs"
-            >
-              <Download className="size-4" />
-              {exporting ? "Mengekspor…" : "Export PDF"}
-            </Button>
+            {/* Menu Dropdown Export PDF */}
+            <div className="relative" ref={exportMenuRef}>
+              <Button
+                size="sm"
+                onClick={() => setIsExportMenuOpen((p) => !p)}
+                disabled={exporting !== null}
+                className="gap-1.5 font-semibold shadow-xs"
+              >
+                <Download className="size-4" />
+                <span>
+                  {exporting === "week"
+                    ? "Mengekspor Minggu…"
+                    : exporting === "month"
+                      ? "Mengekspor Bulan…"
+                      : "Download PDF"}
+                </span>
+                <ChevronDown className="size-3.5 opacity-80" />
+              </Button>
+
+              {isExportMenuOpen && (
+                <div className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border bg-popover p-1.5 text-popover-foreground shadow-lg animate-in fade-in zoom-in-95 duration-150">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsExportMenuOpen(false);
+                      handleExportWeek();
+                    }}
+                    className="flex w-full items-start gap-2.5 rounded-lg p-2 text-left text-xs transition-colors hover:bg-muted"
+                  >
+                    <FileText className="mt-0.5 size-4 shrink-0 text-primary" />
+                    <div>
+                      <div className="font-semibold text-foreground">
+                        Download Minggu Ini
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Minggu {data.weekNumber || 1} ({currentMonthLabel}) • 1 Lembar
+                      </div>
+                    </div>
+                  </button>
+
+                  <div className="my-1 border-t" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsExportMenuOpen(false);
+                      handleExportMonth();
+                    }}
+                    className="flex w-full items-start gap-2.5 rounded-lg p-2 text-left text-xs transition-colors hover:bg-primary/10"
+                  >
+                    <CalendarRange className="mt-0.5 size-4 shrink-0 text-primary" />
+                    <div>
+                      <div className="font-semibold text-primary">
+                        Download 1 Bulan Penuh
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Semua minggu di bulan {currentMonthLabel} dalam 1 PDF
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -394,6 +482,8 @@ export default function Page() {
             selectedMonth={selectedMonth}
             onSelectMonth={handleSelectMonth}
             onSelectWeek={handleSelectWeek}
+            onDownloadMonth={handleExportMonth}
+            isDownloadingMonth={exporting === "month"}
           />
         </div>
 

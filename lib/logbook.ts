@@ -416,6 +416,17 @@ export function logbookFilename(
   return `logbook-${slugifyName(nama)}${weekPart}-${todayISODate(d)}.pdf`;
 }
 
+/** logbook-[name]-bulan-[bulan-tahun]-[date].pdf */
+export function monthlyLogbookFilename(
+  nama: string,
+  monthValue: string,
+  d = new Date(),
+): string {
+  const found = AVAILABLE_MONTHS.find((m) => m.value === monthValue);
+  const monthSlug = found ? slugifyName(found.label) : monthValue;
+  return `logbook-${slugifyName(nama)}-bulan-${monthSlug}-${todayISODate(d)}.pdf`;
+}
+
 export const AVAILABLE_MONTHS = [
   { value: "2026-07", label: "Juli 2026", year: 2026, month: 7 },
   { value: "2026-08", label: "Agustus 2026", year: 2026, month: 8 },

@@ -2,7 +2,12 @@
 
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { logbookFilename, type LogbookData } from "./logbook";
+import {
+  logbookFilename,
+  monthlyLogbookFilename,
+  type LogbookData,
+  type LogbookWeek,
+} from "./logbook";
 
 async function loadImageAsDataURL(path: string): Promise<string | null> {
   try {
@@ -20,19 +25,20 @@ async function loadImageAsDataURL(path: string): Promise<string | null> {
   }
 }
 
-export async function exportLogbookPdf(data: LogbookData): Promise<string> {
-  const filename = logbookFilename(
-    data.nama || data.namaMahasiswa,
-    data.weekNumber,
-  );
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+/**
+ * Menggambar 1 lembar logbook mingguan lengkap (Kop, Judul, Identitas, Tabel Kegiatan, TTD)
+ */
+export function drawLogbookSheet(
+  doc: jsPDF,
+  data: LogbookData,
+  logoLeft: string | null,
+): void {
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 15;
   const contentWidth = pageWidth - margin * 2;
   let y = 12;
 
   // ---- Kop header (mirrors docs/template-logbook.pdf) ----
-  const logoLeft = await loadImageAsDataURL("/logo1.png");
   if (logoLeft) {
     try {
       doc.addImage(logoLeft, "PNG", margin, y + 1, 20, 20);
@@ -92,7 +98,7 @@ export async function exportLogbookPdf(data: LogbookData): Promise<string> {
     startY: y,
     theme: "grid",
     body: [
-      ["Nama", ":", data.nama || ""],
+      ["Nama", ":", data.nama || data.namaMahasiswa || ""],
       ["NIM", ":", data.nim || ""],
       ["Program Studi", ":", data.programStudi || ""],
       ["Nama Mitra Industri", ":", data.namaMitra || ""],
@@ -117,7 +123,7 @@ export async function exportLogbookPdf(data: LogbookData): Promise<string> {
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
     .finalY + 4;
 
-  // ---- Activity table (1 header + min 7 rows like template) ----
+  // ---- Activity table (1 header + min 5 rows like template) ----
   const body = data.activities.map((a) => [
     a.hariTanggal,
     a.jamMasuk,
@@ -216,6 +222,58 @@ export async function exportLogbookPdf(data: LogbookData): Promise<string> {
   doc.setFont("times", "bold");
   doc.text(pembimbing, dosenX, posNameY, { align: "center" });
   doc.text(mentor, mentorX, posNameY, { align: "center" });
+}
+
+/**
+ * Export PDF untuk 1 minggu aktif
+ */
+export async function exportLogbookPdf(data: LogbookData): Promise<string> {
+  const filename = logbookFilename(
+    data.nama || data.namaMahasiswa,
+    data.weekNumber,
+  );
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const logoLeft = await loadImageAsDataURL("/logo1.png");
+
+  drawLogbookSheet(doc, data, logoLeft);
+
+  doc.save(filename);
+  return filename;
+}
+
+/**
+ * Export PDF sekaligus untuk 1 bulan penuh (seluruh minggu di bulan tersebut digabung dalam 1 PDF)
+ */
+export async function exportMonthlyLogbookPdf(
+  profileData: LogbookData,
+  monthWeeks: LogbookWeek[],
+  monthValue: string,
+): Promise<string> {
+  const filename = monthlyLogbookFilename(
+    profileData.nama || profileData.namaMahasiswa,
+    monthValue,
+  );
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const logoLeft = await loadImageAsDataURL("/logo1.png");
+
+  // Urutkan minggu 1, 2, 3...
+  const sortedWeeks = [...monthWeeks].sort(
+    (a, b) => a.weekNumber - b.weekNumber,
+  );
+
+  sortedWeeks.forEach((week, idx) => {
+    if (idx > 0) {
+      doc.addPage();
+    }
+
+    const weekData: LogbookData = {
+      ...profileData,
+      weekNumber: week.weekNumber,
+      activities: week.activities,
+    };
+
+    drawLogbookSheet(doc, weekData, logoLeft);
+  });
 
   doc.save(filename);
   return filename;
