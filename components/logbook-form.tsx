@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Layers,
   List,
   Plus,
@@ -67,21 +68,10 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
 
   const currentActivity = data.activities[safeActiveIndex];
 
-  // Set start date and automatically generate dates for all activities
-  const handleStartDateChange = (startDateStr: string) => {
-    const parsed = parseIndonesianDate(startDateStr);
-    if (!parsed) return;
-    const generated = generateWorkdayDates(parsed, data.activities.length);
-    onChange({
-      ...data,
-      activities: data.activities.map((act, idx) => ({
-        ...act,
-        hariTanggal: generated[idx] || act.hariTanggal,
-      })),
-    });
-  };
+  const centralJamMasuk = data.activities[0]?.jamMasuk || "08:00";
+  const centralJamPulang = data.activities[0]?.jamPulang || "16:00";
 
-  // Set default jam masuk for all activities
+  // Set default jam masuk untuk seluruh hari di minggu ini (jam terpusat)
   const handleSetAllJamMasuk = (time: string) => {
     onChange({
       ...data,
@@ -92,7 +82,7 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
     });
   };
 
-  // Set default jam pulang for all activities
+  // Set default jam pulang untuk seluruh hari di minggu ini (jam terpusat)
   const handleSetAllJamPulang = (time: string) => {
     onChange({
       ...data,
@@ -101,61 +91,6 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
         jamPulang: time,
       })),
     });
-  };
-
-  const handleRowDateChange = (idx: number, val: string) => {
-    if (idx === 0) {
-      const parsed = parseIndonesianDate(val);
-      if (parsed) {
-        const generated = generateWorkdayDates(parsed, data.activities.length);
-        onChange({
-          ...data,
-          activities: data.activities.map((act, i) => {
-            if (i === 0) return { ...act, hariTanggal: val };
-            if (!act.hariTanggal) return { ...act, hariTanggal: generated[i] };
-            return act;
-          }),
-        });
-        return;
-      }
-    }
-    updateActivity(data.activities[idx].id, { hariTanggal: val });
-  };
-
-  const handleRowJamMasukChange = (idx: number, val: string) => {
-    if (idx === 0) {
-      const prevVal = data.activities[0]?.jamMasuk || "";
-      onChange({
-        ...data,
-        activities: data.activities.map((act, i) => {
-          if (i === 0) return { ...act, jamMasuk: val };
-          if (!act.jamMasuk || act.jamMasuk === prevVal) {
-            return { ...act, jamMasuk: val };
-          }
-          return act;
-        }),
-      });
-    } else {
-      updateActivity(data.activities[idx].id, { jamMasuk: val });
-    }
-  };
-
-  const handleRowJamPulangChange = (idx: number, val: string) => {
-    if (idx === 0) {
-      const prevVal = data.activities[0]?.jamPulang || "";
-      onChange({
-        ...data,
-        activities: data.activities.map((act, i) => {
-          if (i === 0) return { ...act, jamPulang: val };
-          if (!act.jamPulang || act.jamPulang === prevVal) {
-            return { ...act, jamPulang: val };
-          }
-          return act;
-        }),
-      });
-    } else {
-      updateActivity(data.activities[idx].id, { jamPulang: val });
-    }
   };
 
   const handleAddActivity = () => {
@@ -366,7 +301,7 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <CardTitle className="text-base font-semibold">
-                Kegiatan Harian
+                Kegiatan Minggu {data.weekNumber || 1}
               </CardTitle>
             </div>
             <div className="flex items-center gap-2">
@@ -412,92 +347,80 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
           </div>
         </CardHeader>
         <CardContent className="space-y-3.5">
-          {/* Bar Pengaturan Cepat Jadwal (Senin – Jumat) */}
-          <div className="rounded-lg border border-primary/25 bg-primary/5 p-2.5 text-xs">
-            <div className="mb-2 flex items-center gap-1.5 font-semibold text-foreground">
-              <Calendar className="size-3.5 text-primary" />
-              <span>Jadwal Kerja (Senin – Jumat)</span>
+          {/* Jam Kerja Default Mingguan */}
+          <div className="rounded-lg border bg-muted/25 p-2.5 text-xs">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-medium text-foreground">
+                <Clock className="size-3.5 text-primary" />
+                <span>Jam Kerja Default</span>
+              </div>
+              <span className="text-[11px] text-muted-foreground">
+                Otomatis untuk semua hari
+              </span>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1">
                 <Label
-                  htmlFor="quick-start-date"
-                  className="text-[11px] font-medium text-foreground"
-                >
-                  Tanggal Mulai
-                </Label>
-                <Input
-                  id="quick-start-date"
-                  type="date"
-                  className="h-8 bg-background text-xs"
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      handleStartDateChange(e.target.value);
-                    }
-                  }}
-                />
-              </div>
-
-              <div className="grid gap-1">
-                <Label
-                  htmlFor="quick-jam-masuk"
-                  className="text-[11px] font-medium text-foreground"
+                  htmlFor="central-jam-masuk"
+                  className="text-[11px] text-muted-foreground"
                 >
                   Jam Masuk
                 </Label>
                 <Input
-                  id="quick-jam-masuk"
+                  id="central-jam-masuk"
                   type="time"
                   className="h-8 bg-background text-xs"
-                  value={data.activities[0]?.jamMasuk || ""}
+                  value={centralJamMasuk}
                   onChange={(e) => handleSetAllJamMasuk(e.target.value)}
-                  placeholder="08:00"
                 />
               </div>
 
               <div className="grid gap-1">
                 <Label
-                  htmlFor="quick-jam-pulang"
-                  className="text-[11px] font-medium text-foreground"
+                  htmlFor="central-jam-pulang"
+                  className="text-[11px] text-muted-foreground"
                 >
                   Jam Pulang
                 </Label>
                 <Input
-                  id="quick-jam-pulang"
+                  id="central-jam-pulang"
                   type="time"
                   className="h-8 bg-background text-xs"
-                  value={data.activities[0]?.jamPulang || ""}
+                  value={centralJamPulang}
                   onChange={(e) => handleSetAllJamPulang(e.target.value)}
-                  placeholder="17:00"
                 />
               </div>
             </div>
           </div>
 
           {viewMode === "tab" ? (
-            /* Mode 1: Tab Baris Ringkas (Tinggi tetap ~220px, hemat tempat) */
+            /* Mode 1: Tab Baris Ringkas */
             <div className="flex flex-col gap-3">
-              {/* Daftar Tab Nomor Baris */}
+              {/* Daftar Tab Hari (Senin, Selasa, dll.) */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin">
                 {data.activities.map((act, idx) => {
                   const isFilled = Boolean(
-                    act.hariTanggal || act.jamMasuk || act.kegiatan,
+                    act.kegiatan && act.kegiatan.trim() !== "",
                   );
                   const isActive = idx === safeActiveIndex;
+                  const dayName = act.hariTanggal
+                    ? act.hariTanggal.split(",")[0]
+                    : `Hari ${idx + 1}`;
+
                   return (
                     <button
                       key={act.id}
                       type="button"
                       onClick={() => setActiveTabIndex(idx)}
                       className={cn(
-                        "relative flex h-8 shrink-0 items-center justify-center rounded-md px-2.5 text-xs font-medium transition-all",
+                        "relative flex h-8 shrink-0 items-center justify-center rounded-md px-3 text-xs font-medium transition-all",
                         isActive
                           ? "bg-primary text-primary-foreground shadow-xs font-semibold"
                           : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
                       )}
                     >
-                      Baris {idx + 1}
+                      {dayName}
                       {isFilled && !isActive && (
                         <span className="ml-1.5 size-1.5 rounded-full bg-emerald-500" />
                       )}
@@ -509,108 +432,77 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
                   variant="outline"
                   size="icon-sm"
                   className="h-8 w-8 shrink-0 border-dashed"
-                  title="Tambah baris kegiatan (opsional)"
+                  title="Tambah hari kegiatan (opsional)"
                   onClick={handleAddActivity}
                 >
                   <Plus className="size-3.5" />
                 </Button>
               </div>
 
-              {/* Form Baris yang Sedang Aktif */}
+              {/* Form Hari yang Sedang Aktif: Hanya Jam & Kegiatan */}
               {currentActivity && (
                 <div className="rounded-lg border bg-card/60 p-3.5 shadow-2xs">
                   <div className="mb-3 flex items-center justify-between border-b pb-2">
-                    <span className="text-xs font-semibold text-foreground">
-                      Baris ke-{safeActiveIndex + 1} dari{" "}
-                      {data.activities.length}
+                    <span className="text-xs font-bold text-foreground">
+                      {currentActivity.hariTanggal ||
+                        `Hari ke-${safeActiveIndex + 1}`}
                     </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive px-2"
-                      disabled={data.activities.length <= 1}
-                      onClick={() => setConfirmDeleteRowId(currentActivity.id)}
-                    >
-                      <Trash2 className="mr-1 size-3.5" /> Hapus Baris Ini
-                    </Button>
+                    {data.activities.length > 5 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive px-2"
+                        onClick={() => setConfirmDeleteRowId(currentActivity.id)}
+                      >
+                        <Trash2 className="mr-1 size-3.5" /> Hapus Hari
+                      </Button>
+                    )}
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  {/* Input Jam Masuk & Jam Pulang untuk hari ini saja */}
+                  <div className="mb-3 grid grid-cols-2 gap-3">
                     <div className="grid gap-1">
-                      <Label className="text-[11px] text-muted-foreground">
-                        Hari, Tanggal
-                      </Label>
-                      <div className="flex gap-1.5">
-                        <Input
-                          placeholder="Senin, 01/09/2026"
-                          value={currentActivity.hariTanggal}
-                          onChange={(e) =>
-                            handleRowDateChange(safeActiveIndex, e.target.value)
-                          }
-                        />
-                        {safeActiveIndex === 0 && (
-                          <div className="relative shrink-0">
-                            <Input
-                              type="date"
-                              id="tab-date-picker-0"
-                              className="sr-only"
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  handleStartDateChange(e.target.value);
-                                }
-                              }}
-                            />
-                            <label
-                              htmlFor="tab-date-picker-0"
-                              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border bg-background text-muted-foreground shadow-2xs hover:bg-muted hover:text-foreground"
-                              title="Pilih tanggal dari kalender untuk mengisi seluruh hari"
-                            >
-                              <Calendar className="size-4" />
-                            </label>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid gap-1">
-                      <Label className="text-[11px] text-muted-foreground">
+                      <Label className="text-[11px] font-medium text-foreground">
                         Jam Masuk
                       </Label>
                       <Input
                         type="time"
-                        value={currentActivity.jamMasuk}
+                        className="h-8 bg-background text-xs font-medium"
+                        value={currentActivity.jamMasuk || "08:00"}
                         onChange={(e) =>
-                          handleRowJamMasukChange(
-                            safeActiveIndex,
-                            e.target.value,
-                          )
+                          updateActivity(currentActivity.id, {
+                            jamMasuk: e.target.value,
+                          })
                         }
                       />
                     </div>
                     <div className="grid gap-1">
-                      <Label className="text-[11px] text-muted-foreground">
+                      <Label className="text-[11px] font-medium text-foreground">
                         Jam Pulang
                       </Label>
                       <Input
                         type="time"
-                        value={currentActivity.jamPulang}
+                        className="h-8 bg-background text-xs font-medium"
+                        value={currentActivity.jamPulang || "16:00"}
                         onChange={(e) =>
-                          handleRowJamPulangChange(
-                            safeActiveIndex,
-                            e.target.value,
-                          )
+                          updateActivity(currentActivity.id, {
+                            jamPulang: e.target.value,
+                          })
                         }
                       />
                     </div>
                   </div>
 
-                  <div className="mt-2.5 grid gap-1">
-                    <Label className="text-[11px] text-muted-foreground">
+                  {/* Input Kegiatan untuk hari ini */}
+                  <div className="grid gap-1">
+                    <Label className="text-[11px] font-medium text-foreground">
                       Kegiatan
                     </Label>
                     <Textarea
-                      placeholder="Deskripsikan kegiatan magang pada baris ini..."
-                      rows={3}
+                      placeholder="Deskripsikan kegiatan magang pada hari ini..."
+                      rows={4}
+                      className="text-xs resize-none"
                       value={currentActivity.kegiatan}
                       onChange={(e) =>
                         updateActivity(currentActivity.id, {
@@ -632,7 +524,7 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
                         setActiveTabIndex((p) => Math.max(0, p - 1))
                       }
                     >
-                      <ChevronLeft className="mr-1 size-3.5" /> Baris Sebelumnya
+                      <ChevronLeft className="mr-1 size-3.5" /> Hari Sebelumnya
                     </Button>
                     <span className="text-[11px] text-muted-foreground">
                       {safeActiveIndex + 1} / {data.activities.length}
@@ -649,103 +541,72 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
                         )
                       }
                     >
-                      Baris Berikutnya <ChevronRight className="ml-1 size-3.5" />
+                      Hari Berikutnya <ChevronRight className="ml-1 size-3.5" />
                     </Button>
                   </div>
                 </div>
               )}
             </div>
           ) : (
-            /* Mode 2: Tampilkan Semua (dengan scroll container agar tidak molor panjang) */
+            /* Mode 2: Tampilkan Semua */
             <div className="flex flex-col gap-3">
               <div className="max-h-[460px] space-y-3 overflow-y-auto pr-1">
                 {data.activities.map((a, i) => (
                   <div
                     key={a.id}
-                    className="rounded-lg border bg-card/60 p-3 transition-colors hover:border-primary/40"
+                    className="rounded-lg border bg-card/60 p-3.5 transition-colors hover:border-primary/40"
                   >
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-                        Baris {i + 1}
+                    <div className="mb-2.5 flex items-center justify-between border-b pb-2">
+                      <span className="text-xs font-bold text-foreground">
+                        {a.hariTanggal || `Hari ke-${i + 1}`}
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Hapus baris ${i + 1}`}
-                        disabled={data.activities.length <= 1}
-                        onClick={() => setConfirmDeleteRowId(a.id)}
-                      >
-                        <Trash2 className="size-3.5 text-destructive/80 hover:text-destructive" />
-                      </Button>
+                      {data.activities.length > 5 && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Hapus hari ${i + 1}`}
+                          onClick={() => setConfirmDeleteRowId(a.id)}
+                        >
+                          <Trash2 className="size-3.5 text-destructive/80 hover:text-destructive" />
+                        </Button>
+                      )}
                     </div>
-                    <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="mb-2.5 grid grid-cols-2 gap-3">
                       <div className="grid gap-1">
-                        <Label className="text-[11px] text-muted-foreground">
-                          Hari, Tanggal
-                        </Label>
-                        <div className="flex gap-1.5">
-                          <Input
-                            placeholder="Senin, 01/09/2026"
-                            value={a.hariTanggal}
-                            onChange={(e) =>
-                              handleRowDateChange(i, e.target.value)
-                            }
-                          />
-                          {i === 0 && (
-                            <div className="relative shrink-0">
-                              <Input
-                                type="date"
-                                id="list-date-picker-0"
-                                className="sr-only"
-                                onChange={(e) => {
-                                  if (e.target.value) {
-                                    handleStartDateChange(e.target.value);
-                                  }
-                                }}
-                              />
-                              <label
-                                htmlFor="list-date-picker-0"
-                                className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border bg-background text-muted-foreground shadow-2xs hover:bg-muted hover:text-foreground"
-                                title="Pilih tanggal dari kalender untuk mengisi seluruh hari"
-                              >
-                                <Calendar className="size-4" />
-                              </label>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="grid gap-1">
-                        <Label className="text-[11px] text-muted-foreground">
+                        <Label className="text-[11px] font-medium text-foreground">
                           Jam Masuk
                         </Label>
                         <Input
                           type="time"
-                          value={a.jamMasuk}
+                          className="h-8 bg-background text-xs font-medium"
+                          value={a.jamMasuk || "08:00"}
                           onChange={(e) =>
-                            handleRowJamMasukChange(i, e.target.value)
+                            updateActivity(a.id, { jamMasuk: e.target.value })
                           }
                         />
                       </div>
                       <div className="grid gap-1">
-                        <Label className="text-[11px] text-muted-foreground">
+                        <Label className="text-[11px] font-medium text-foreground">
                           Jam Pulang
                         </Label>
                         <Input
                           type="time"
-                          value={a.jamPulang}
+                          className="h-8 bg-background text-xs font-medium"
+                          value={a.jamPulang || "16:00"}
                           onChange={(e) =>
-                            handleRowJamPulangChange(i, e.target.value)
+                            updateActivity(a.id, { jamPulang: e.target.value })
                           }
                         />
                       </div>
                     </div>
-                    <div className="mt-2 grid gap-1">
-                      <Label className="text-[11px] text-muted-foreground">
+                    <div className="grid gap-1">
+                      <Label className="text-[11px] font-medium text-foreground">
                         Kegiatan
                       </Label>
                       <Textarea
-                        placeholder="Deskripsikan kegiatan magang..."
+                        placeholder="Deskripsikan kegiatan magang pada hari ini..."
                         rows={2}
+                        className="text-xs resize-none"
                         value={a.kegiatan}
                         onChange={(e) =>
                           updateActivity(a.id, { kegiatan: e.target.value })
@@ -757,10 +618,10 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
               </div>
               <Button
                 variant="outline"
-                className="mt-1 border-dashed"
+                className="mt-1 border-dashed text-xs"
                 onClick={handleAddActivity}
               >
-                <Plus className="size-4" /> Tambah baris kegiatan (opsional)
+                <Plus className="size-4" /> Tambah hari kegiatan (opsional)
               </Button>
             </div>
           )}

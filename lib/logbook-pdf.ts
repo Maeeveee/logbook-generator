@@ -21,7 +21,10 @@ async function loadImageAsDataURL(path: string): Promise<string | null> {
 }
 
 export async function exportLogbookPdf(data: LogbookData): Promise<string> {
-  const filename = logbookFilename(data.nama || data.namaMahasiswa);
+  const filename = logbookFilename(
+    data.nama || data.namaMahasiswa,
+    data.weekNumber,
+  );
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 15;

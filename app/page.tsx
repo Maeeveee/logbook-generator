@@ -7,20 +7,34 @@ import { ConfirmModal } from "@/components/confirm-modal";
 import { LogbookForm } from "@/components/logbook-form";
 import { LogbookImportModal } from "@/components/logbook-import-modal";
 import { LogbookPreview } from "@/components/logbook-preview";
+import { WeekSwitcher } from "@/components/week-switcher";
 import {
+  AVAILABLE_MONTHS,
   clearSavedProfile,
+  clearSavedWeeks,
   createActivity,
   defaultLogbook,
+  getSavedActiveWeekId,
   getSavedProfile,
+  getSavedWeeks,
+  getWorkdaysForMonthWeek,
+  initWeeksForMonth,
   logbookFilename,
+  saveActiveWeekId,
   saveProfile,
+  saveWeeks,
   todayISODate,
   type LogbookActivity,
+  type LogbookData,
+  type LogbookWeek,
 } from "@/lib/logbook";
 import { exportLogbookPdf } from "@/lib/logbook-pdf";
 
 export default function Page() {
   const [data, setData] = useState(defaultLogbook);
+  const [weeks, setWeeks] = useState<LogbookWeek[]>([]);
+  const [activeWeekId, setActiveWeekId] = useState<string>("");
+  const [selectedMonth, setSelectedMonth] = useState<string>("2026-09");
   const [exporting, setExporting] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -29,7 +43,7 @@ export default function Page() {
   const [isResetMenuOpen, setIsResetMenuOpen] = useState(false);
   const resetMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close reset dropdown when clicking outside
+  // Tutup dropdown reset jika klik di luar
   useEffect(() => {
     if (!isResetMenuOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -44,16 +58,48 @@ export default function Page() {
     return () => window.removeEventListener("mousedown", handleClickOutside);
   }, [isResetMenuOpen]);
 
-  // Muat data profil tersimpan dari localStorage saat pertama kali render
+  // Muat data profil tersimpan dan inisialisasi minggu-minggu otomatis dari localStorage
   useEffect(() => {
-    const saved = getSavedProfile();
-    if (Object.keys(saved).length > 0) {
-      setData((prev) => ({
-        ...prev,
-        ...saved,
-        namaMahasiswa: saved.nama || prev.namaMahasiswa,
-      }));
+    const savedProfile = getSavedProfile();
+    const profileData =
+      Object.keys(savedProfile).length > 0
+        ? {
+            ...savedProfile,
+            namaMahasiswa: savedProfile.nama || "",
+          }
+        : {};
+
+    // Tentukan bulan awal (default September 2026)
+    const initialMonth = "2026-09";
+    setSelectedMonth(initialMonth);
+
+    let loadedWeeks = getSavedWeeks();
+    // Inisialisasi minggu-minggu untuk bulan September 2026 jika belum ada
+    loadedWeeks = initWeeksForMonth(initialMonth, loadedWeeks);
+    saveWeeks(loadedWeeks);
+
+    const savedActiveId = getSavedActiveWeekId();
+    let activeWeek = loadedWeeks.find((w) => w.id === savedActiveId);
+    if (!activeWeek) {
+      activeWeek =
+        loadedWeeks.find((w) => w.month === initialMonth) || loadedWeeks[0];
     }
+
+    const initialActiveId = activeWeek.id;
+    saveActiveWeekId(initialActiveId);
+
+    if (activeWeek.month) {
+      setSelectedMonth(activeWeek.month);
+    }
+
+    setWeeks(loadedWeeks);
+    setActiveWeekId(initialActiveId);
+    setData((prev) => ({
+      ...prev,
+      ...profileData,
+      weekNumber: activeWeek.weekNumber,
+      activities: activeWeek.activities,
+    }));
     setIsLoaded(true);
   }, []);
 
@@ -80,9 +126,21 @@ export default function Page() {
     data.ttdMahasiswa,
   ]);
 
+  // Simpan daftar minggu ke localStorage jika ada perubahan
+  useEffect(() => {
+    if (!isLoaded || weeks.length === 0) return;
+    saveWeeks(weeks);
+  }, [isLoaded, weeks]);
+
+  // Simpan activeWeekId ke localStorage jika ada perubahan
+  useEffect(() => {
+    if (!isLoaded || !activeWeekId) return;
+    saveActiveWeekId(activeWeekId);
+  }, [isLoaded, activeWeekId]);
+
   const filename = useMemo(
-    () => logbookFilename(data.nama || data.namaMahasiswa),
-    [data.nama, data.namaMahasiswa],
+    () => logbookFilename(data.nama || data.namaMahasiswa, data.weekNumber),
+    [data.nama, data.namaMahasiswa, data.weekNumber],
   );
 
   const handleExport = async () => {
@@ -94,33 +152,147 @@ export default function Page() {
     }
   };
 
-  // Import baris kegiatan dari file / teks
+  // Sinkronisasi data form ke state global dan baris minggu aktif
+  const handleDataChange = (newData: LogbookData) => {
+    setData(newData);
+    setWeeks((prev) =>
+      prev.map((w) =>
+        w.id === activeWeekId
+          ? {
+              ...w,
+              activities: newData.activities,
+            }
+          : w,
+      ),
+    );
+  };
+
+  // Pilih bulan dari dropdown: langsung tampilkan week-week di bulan tersebut tanpa perlu input apa-apa!
+  const handleSelectMonth = (newMonth: string) => {
+    setSelectedMonth(newMonth);
+
+    // Ambil template jam kerja dari aktivitas sebelumnya jika ada
+    let inheritedJamMasuk = "08:00";
+    let inheritedJamPulang = "16:00";
+    const currentWeek = weeks.find((w) => w.id === activeWeekId);
+    if (currentWeek) {
+      const firstFilled = currentWeek.activities.find(
+        (a) => a.jamMasuk && a.jamPulang,
+      );
+      if (firstFilled) {
+        inheritedJamMasuk = firstFilled.jamMasuk;
+        inheritedJamPulang = firstFilled.jamPulang;
+      }
+    }
+
+    // Pastikan seluruh week di bulan baru telah dibuat dengan tanggal otomatis
+    const updatedWeeks = initWeeksForMonth(
+      newMonth,
+      weeks,
+      inheritedJamMasuk,
+      inheritedJamPulang,
+    );
+    setWeeks(updatedWeeks);
+
+    // Pilih minggu pertama di bulan tersebut
+    const firstWeekInNewMonth =
+      updatedWeeks.find((w) => w.month === newMonth) || updatedWeeks[0];
+
+    setActiveWeekId(firstWeekInNewMonth.id);
+    setData((prev) => ({
+      ...prev,
+      weekNumber: firstWeekInNewMonth.weekNumber,
+      activities: firstWeekInNewMonth.activities,
+    }));
+  };
+
+  // Pilih tab minggu
+  const handleSelectWeek = (id: string) => {
+    const target = weeks.find((w) => w.id === id);
+    if (!target) return;
+    setActiveWeekId(id);
+    if (target.month) {
+      setSelectedMonth(target.month);
+    }
+    setData((prev) => ({
+      ...prev,
+      weekNumber: target.weekNumber,
+      activities: target.activities,
+    }));
+  };
+
+  // Import baris kegiatan dari file / teks ke minggu aktif
   const handleImportActivities = (
     imported: LogbookActivity[],
     mode: "replace" | "append",
   ) => {
+    const newActivities =
+      mode === "replace" ? imported : [...data.activities, ...imported];
+
     setData((prev) => ({
       ...prev,
-      activities:
-        mode === "replace"
-          ? imported
-          : [...prev.activities, ...imported],
+      activities: newActivities,
     }));
+    setWeeks((prev) =>
+      prev.map((w) =>
+        w.id === activeWeekId ? { ...w, activities: newActivities } : w,
+      ),
+    );
   };
 
-  // Reset baris kegiatan logbook saja (data diri tetap tersimpan)
+  // Reset baris kegiatan logbook pada minggu aktif ke tanggal default awal bulan
   const handleResetKegiatan = () => {
+    const activeWeek = weeks.find((w) => w.id === activeWeekId);
+    const [y, m] = (activeWeek?.month || selectedMonth).split("-").map(Number);
+    const defaultDates = getWorkdaysForMonthWeek(
+      y,
+      m,
+      activeWeek?.weekNumber || 1,
+    );
+
+    const resetActivities = defaultDates.map((hariTanggal) =>
+      createActivity({
+        hariTanggal,
+        jamMasuk: "08:00",
+        jamPulang: "16:00",
+        kegiatan: "",
+      }),
+    );
+
     setData((prev) => ({
       ...prev,
-      activities: Array.from({ length: 5 }, () => createActivity()),
+      activities: resetActivities,
     }));
+    setWeeks((prev) =>
+      prev.map((w) =>
+        w.id === activeWeekId ? { ...w, activities: resetActivities } : w,
+      ),
+    );
   };
 
-  // Reset seluruh data termasuk profil di localStorage
+  // Reset seluruh data termasuk profil dan seluruh minggu di localStorage
   const handleResetSemua = () => {
     clearSavedProfile();
-    setData(defaultLogbook());
+    clearSavedWeeks();
+    const initialMonth = "2026-09";
+    const newWeeks = initWeeksForMonth(initialMonth, []);
+    const firstWeek = newWeeks[0];
+
+    setSelectedMonth(initialMonth);
+    setWeeks(newWeeks);
+    setActiveWeekId(firstWeek.id);
+    setData({
+      ...defaultLogbook(),
+      activities: firstWeek.activities,
+      weekNumber: firstWeek.weekNumber,
+    });
   };
+
+  // Label bulan aktif saat ini untuk judul tampilan
+  const currentMonthLabel = useMemo(() => {
+    const found = AVAILABLE_MONTHS.find((m) => m.value === selectedMonth);
+    return found ? found.label : selectedMonth;
+  }, [selectedMonth]);
 
   return (
     <div className="min-h-svh bg-muted/40">
@@ -169,10 +341,10 @@ export default function Page() {
                     <RotateCcw className="mt-0.5 size-3.5 shrink-0 text-primary" />
                     <div>
                       <div className="font-medium text-foreground">
-                        Reset Kegiatan
+                        Reset Minggu Ini
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        Kosongkan kegiatan, data diri tetap aman
+                        Kosongkan kegiatan minggu {data.weekNumber || 1} ({currentMonthLabel})
                       </div>
                     </div>
                   </button>
@@ -191,7 +363,7 @@ export default function Page() {
                     <div>
                       <div className="font-medium">Hapus Semua Data</div>
                       <div className="text-[11px] opacity-80">
-                        Hapus data diri, profil, dan kegiatan
+                        Hapus profil dan seluruh riwayat logbook
                       </div>
                     </div>
                   </button>
@@ -213,23 +385,36 @@ export default function Page() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[400px_minmax(0,1fr)]">
-        <section aria-label="Form input logbook" className="min-w-0">
-          <LogbookForm
-            data={data}
-            onChange={setData}
-            onOpenImport={() => setIsImportOpen(true)}
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        {/* Switcher Bulan 2026 & Tab Minggu Otomatis */}
+        <div className="mb-6">
+          <WeekSwitcher
+            weeks={weeks}
+            activeWeekId={activeWeekId}
+            selectedMonth={selectedMonth}
+            onSelectMonth={handleSelectMonth}
+            onSelectWeek={handleSelectWeek}
           />
-        </section>
+        </div>
 
-        <section
-          aria-label="Pratinjau template logbook"
-          className="min-w-0 overflow-x-auto"
-        >
-          <div className="flex justify-center pb-10">
-            <LogbookPreview data={data} />
-          </div>
-        </section>
+        <div className="grid gap-6 lg:grid-cols-[400px_minmax(0,1fr)]">
+          <section aria-label="Form input logbook" className="min-w-0">
+            <LogbookForm
+              data={data}
+              onChange={handleDataChange}
+              onOpenImport={() => setIsImportOpen(true)}
+            />
+          </section>
+
+          <section
+            aria-label="Pratinjau template logbook"
+            className="min-w-0 overflow-x-auto"
+          >
+            <div className="flex justify-center pb-10">
+              <LogbookPreview data={data} />
+            </div>
+          </section>
+        </div>
       </main>
 
       {/* Modal Import Teks / File */}
@@ -240,14 +425,14 @@ export default function Page() {
         currentActivityCount={data.activities.length}
       />
 
-      {/* Modal Konfirmasi: Reset Kegiatan */}
+      {/* Modal Konfirmasi: Reset Kegiatan Minggu Ini */}
       <ConfirmModal
         isOpen={confirmResetKegiatanOpen}
         onClose={() => setConfirmResetKegiatanOpen(false)}
         onConfirm={handleResetKegiatan}
-        title="Kosongkan Tabel Kegiatan?"
-        description="Seluruh baris kegiatan logbook akan dikosongkan kembali ke 5 hari awal. Data diri, mitra, dan pembimbing Anda tetap aman tersimpan."
-        confirmLabel="Ya, Kosongkan Kegiatan"
+        title={`Kosongkan Kegiatan Minggu ${data.weekNumber || 1}?`}
+        description={`Seluruh baris kegiatan pada Minggu ${data.weekNumber || 1} (${currentMonthLabel}) akan dikosongkan kembali ke tanggal awal. Profil Anda dan minggu lain tetap aman.`}
+        confirmLabel="Ya, Kosongkan Minggu Ini"
         variant="warning"
       />
 
@@ -257,11 +442,10 @@ export default function Page() {
         onClose={() => setConfirmResetSemuaOpen(false)}
         onConfirm={handleResetSemua}
         title="Hapus Semua Data Termasuk Profil?"
-        description="Seluruh data diri mahasiswa, mitra, pembimbing, tanda tangan, dan tabel kegiatan yang tersimpan di browser akan dihapus permanen."
+        description="Seluruh data diri mahasiswa, mitra, pembimbing, tanda tangan, dan seluruh riwayat logbook yang tersimpan di browser akan dihapus permanen."
         confirmLabel="Ya, Hapus Permanen"
         variant="destructive"
       />
     </div>
   );
 }
-
