@@ -398,7 +398,7 @@ export default function Page() {
               ) : (
                 <span className="flex items-center gap-1 text-emerald-600 font-medium">
                   <Check className="size-3" />
-                  Tersimpan otomatis
+                  Tersimpan
                 </span>
               )}
             </div>
