@@ -29,10 +29,6 @@ export function WeekSwitcher({
     .filter((w) => w.month === selectedMonth)
     .sort((a, b) => a.weekNumber - b.weekNumber);
 
-  const currentCalendarWeek = currentMonthWeeks.find((w) =>
-    isCurrentCalendarWeek(w),
-  );
-
   return (
     <div className="rounded-xl border bg-card p-3.5 shadow-2xs">
       {/* Header: Label, Indikator Minggu Ini & Dropdown Pilihan Bulan */}

@@ -137,7 +137,7 @@ export default function Page() {
     setIsLoaded(true);
   }, []);
 
-  // Debounced auto-save (350ms): Menghindari freeze / I/O disk berat pada setiap ketikan huruf
+  // Debounced auto-save (500ms): Menghindari freeze / I/O disk berat pada setiap ketikan huruf
   useEffect(() => {
     if (!isLoaded) return;
 
@@ -160,7 +160,7 @@ export default function Page() {
         saveActiveWeekId(activeWeekId);
       }
       setIsSaving(false);
-    }, 350);
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [
