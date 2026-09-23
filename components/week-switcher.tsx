@@ -15,8 +15,6 @@ interface WeekSwitcherProps {
   selectedMonth: string;
   onSelectMonth: (month: string) => void;
   onSelectWeek: (id: string) => void;
-  onDownloadMonth?: () => void;
-  isDownloadingMonth?: boolean;
 }
 
 export function WeekSwitcher({
@@ -25,8 +23,6 @@ export function WeekSwitcher({
   selectedMonth,
   onSelectMonth,
   onSelectWeek,
-  onDownloadMonth,
-  isDownloadingMonth,
 }: WeekSwitcherProps) {
   // Ambil hanya minggu-minggu yang sesuai dengan bulan yang sedang dipilih
   const currentMonthWeeks = weeks
@@ -42,52 +38,28 @@ export function WeekSwitcher({
           <span className="text-xs font-semibold text-foreground">
             Logbook Mingguan
           </span>
-          <span className="hidden text-[11px] text-muted-foreground sm:inline">
-            • {currentMonthWeeks.length} minggu tersedia
-          </span>
         </div>
 
-        {/* Dropdown Bulan 2026 & Tombol Cepat Download 1 Bulan */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="month-select-dropdown"
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Pilih Bulan:
-            </label>
-            <select
-              id="month-select-dropdown"
-              value={selectedMonth}
-              onChange={(e) => onSelectMonth(e.target.value)}
-              className="h-8.5 cursor-pointer rounded-lg border border-primary/40 bg-background px-3 text-xs font-semibold text-foreground shadow-2xs transition-colors hover:border-primary focus:border-primary focus:outline-none"
-            >
-              {AVAILABLE_MONTHS.map((mo) => (
-                <option key={mo.value} value={mo.value}>
-                  {mo.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {onDownloadMonth && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onDownloadMonth}
-              disabled={isDownloadingMonth}
-              className="h-8.5 gap-1.5 border-primary/40 text-xs font-semibold text-primary hover:bg-primary/10"
-              title="Download seluruh minggu di bulan ini ke dalam 1 file PDF gabungan"
-            >
-              <Download className="size-3.5" />
-              <span>
-                {isDownloadingMonth
-                  ? "Mengekspor Bulan…"
-                  : "Download PDF 1 Bulan"}
-              </span>
-            </Button>
-          )}
+        {/* Dropdown Bulan */}
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="month-select-dropdown"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            Pilih Bulan:
+          </label>
+          <select
+            id="month-select-dropdown"
+            value={selectedMonth}
+            onChange={(e) => onSelectMonth(e.target.value)}
+            className="h-8.5 cursor-pointer rounded-lg border border-input bg-background px-3 text-xs font-semibold text-foreground shadow-2xs transition-colors hover:border-primary focus:border-primary focus:outline-none"
+          >
+            {AVAILABLE_MONTHS.map((mo) => (
+              <option key={mo.value} value={mo.value}>
+                {mo.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

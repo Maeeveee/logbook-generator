@@ -3,9 +3,11 @@
 import { useState } from "react";
 import {
   Calendar,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock,
   Layers,
   List,
@@ -13,6 +15,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +49,10 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
   const [viewMode, setViewMode] = useState<"tab" | "list">("tab");
   const [confirmDeleteTtdOpen, setConfirmDeleteTtdOpen] = useState(false);
   const [confirmDeleteRowId, setConfirmDeleteRowId] = useState<string | null>(null);
+
+  const isProfileFilled = Boolean(data.nama && data.nama.trim() !== "");
+  const [userToggledProfile, setUserToggledProfile] = useState<boolean | null>(null);
+  const isProfileExpanded = userToggledProfile !== null ? userToggledProfile : !isProfileFilled;
 
   const set = (patch: Partial<LogbookData>) => onChange({ ...data, ...patch });
 
@@ -123,14 +130,75 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Identitas & Pembimbing */}
-      <Card className="border-primary/20 shadow-sm">
+      {/* Identitas & Pembimbing (Collapsible / Accordion Cerdas) */}
+      <Card className="border-border/80 shadow-2xs transition-all">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">
-            Data Diri & Pembimbing
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <UserCheck className="size-4 text-primary" />
+              <CardTitle className="text-sm font-semibold text-foreground">
+                Data Diri & Pembimbing
+              </CardTitle>
+              {isProfileFilled && !isProfileExpanded && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
+                  <CheckCircle2 className="size-3" /> Lengkap
+                </span>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => setUserToggledProfile(!isProfileExpanded)}
+              className="h-7 gap-1 text-xs text-muted-foreground hover:text-foreground"
+              title={isProfileExpanded ? "Ciutkan form data diri" : "Buka dan edit data diri"}
+            >
+              {isProfileExpanded ? (
+                <>
+                  <span>Ciutkan</span>
+                  <ChevronUp className="size-3.5" />
+                </>
+              ) : (
+                <>
+                  <span>Ubah Data</span>
+                  <ChevronDown className="size-3.5" />
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Ringkasan Ringkas saat Diciutkan (Hemat 400px Ruang Layar) */}
+          {!isProfileExpanded && (
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs">
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="font-semibold text-foreground truncate">
+                  {data.nama || "Nama belum diisi"}{" "}
+                  {data.nim ? (
+                    <span className="font-mono text-muted-foreground font-normal">
+                      ({data.nim})
+                    </span>
+                  ) : null}
+                </span>
+                <span className="text-[11px] text-muted-foreground truncate">
+                  {[data.programStudi, data.namaMitra].filter(Boolean).join(" • ") ||
+                    "Klik Ubah Data untuk melengkapi data diri & pembimbing"}
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => setUserToggledProfile(true)}
+                className="h-6.5 text-[11px] border-primary/30 text-primary hover:bg-primary/10 shrink-0"
+              >
+                Edit
+              </Button>
+            </div>
+          )}
         </CardHeader>
-        <CardContent className="grid gap-3">
+
+        {isProfileExpanded && (
+          <CardContent className="grid gap-3 pt-0">
           <div className="grid gap-1.5">
             <Label htmlFor="nama" className="text-xs font-semibold">
               Nama Mahasiswa
@@ -165,7 +233,7 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
                   id="prodi"
                   value={data.programStudi}
                   onChange={(e) => set({ programStudi: e.target.value })}
-                  className="h-9 w-full min-w-0 cursor-pointer appearance-none rounded-4xl border border-input bg-input/30 px-3 py-1 pr-8 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-9 w-full min-w-0 cursor-pointer appearance-none rounded-lg border border-input bg-background/50 px-3 py-1 pr-8 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="" disabled className="bg-popover text-muted-foreground">
                     Pilih Program Studi
@@ -293,6 +361,7 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
             />
           </div>
         </CardContent>
+        )}
       </Card>
 
       {/* Tabel Kegiatan Harian (Mode Tab Ringkas & Mode List) */}
@@ -442,17 +511,28 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
               {/* Form Hari yang Sedang Aktif: Hanya Jam & Kegiatan */}
               {currentActivity && (
                 <div className="rounded-lg border bg-card/60 p-3.5 shadow-2xs">
-                  <div className="mb-3 flex items-center justify-between border-b pb-2">
-                    <span className="text-xs font-bold text-foreground">
-                      {currentActivity.hariTanggal ||
-                        `Hari ke-${safeActiveIndex + 1}`}
-                    </span>
+                  <div className="mb-3 flex items-center justify-between gap-2 border-b pb-2.5">
+                    <div className="flex flex-1 items-center gap-1.5 min-w-0">
+                      <Calendar className="size-3.5 text-primary shrink-0" />
+                      <Input
+                        type="text"
+                        value={currentActivity.hariTanggal}
+                        onChange={(e) =>
+                          updateActivity(currentActivity.id, {
+                            hariTanggal: e.target.value,
+                          })
+                        }
+                        className="h-7 w-full max-w-[220px] bg-background/80 text-xs font-semibold px-2"
+                        placeholder="Hari, DD/MM/YYYY"
+                        title="Klik untuk mengubah tanggal jika ada libur nasional atau jadwal shift khusus"
+                      />
+                    </div>
                     {data.activities.length > 5 && (
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive px-2"
+                        className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive px-2 shrink-0"
                         onClick={() => setConfirmDeleteRowId(currentActivity.id)}
                       >
                         <Trash2 className="mr-1 size-3.5" /> Hapus Hari
@@ -556,10 +636,20 @@ export function LogbookForm({ data, onChange, onOpenImport }: Props) {
                     key={a.id}
                     className="rounded-lg border bg-card/60 p-3.5 transition-colors hover:border-primary/40"
                   >
-                    <div className="mb-2.5 flex items-center justify-between border-b pb-2">
-                      <span className="text-xs font-bold text-foreground">
-                        {a.hariTanggal || `Hari ke-${i + 1}`}
-                      </span>
+                    <div className="mb-2.5 flex items-center justify-between gap-2 border-b pb-2">
+                      <div className="flex flex-1 items-center gap-1.5 min-w-0">
+                        <Calendar className="size-3.5 text-primary shrink-0" />
+                        <Input
+                          type="text"
+                          value={a.hariTanggal}
+                          onChange={(e) =>
+                            updateActivity(a.id, { hariTanggal: e.target.value })
+                          }
+                          className="h-7 w-full max-w-[220px] bg-background/80 text-xs font-semibold px-2"
+                          placeholder="Hari, DD/MM/YYYY"
+                          title="Klik untuk mengubah tanggal jika ada libur nasional atau jadwal shift khusus"
+                        />
+                      </div>
                       {data.activities.length > 5 && (
                         <Button
                           variant="ghost"

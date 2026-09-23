@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BookOpenText,
   CalendarRange,
+  Check,
   ChevronDown,
   Download,
   FileText,
@@ -46,6 +46,7 @@ export default function Page() {
   const [selectedMonth, setSelectedMonth] = useState<string>("2026-09");
   const [exporting, setExporting] = useState<"week" | "month" | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [confirmResetKegiatanOpen, setConfirmResetKegiatanOpen] = useState(false);
   const [confirmResetSemuaOpen, setConfirmResetSemuaOpen] = useState(false);
@@ -125,6 +126,7 @@ export default function Page() {
   useEffect(() => {
     if (!isLoaded) return;
 
+    setIsSaving(true);
     const timer = setTimeout(() => {
       saveProfile({
         nama: data.nama,
@@ -142,6 +144,7 @@ export default function Page() {
       if (activeWeekId) {
         saveActiveWeekId(activeWeekId);
       }
+      setIsSaving(false);
     }, 350);
 
     return () => clearTimeout(timer);
@@ -354,21 +357,36 @@ export default function Page() {
   }, [selectedMonth]);
 
   return (
-    <div className="min-h-svh bg-muted/40">
+    <div className="min-h-svh bg-muted/40 flex flex-col">
       <header className="sticky top-0 z-10 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2">
-            <BookOpenText className="size-5 text-primary" />
-            <div>
-              <h1 className="text-base leading-tight font-semibold">
-                Generator Logbook Magang
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                Sesuai template Polinema (docs/template-logbook.pdf) • {todayISODate()}
-              </p>
-            </div>
+          <div className="flex items-center gap-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo/logo.webp"
+              alt="Logo Logbook Magang"
+              className="size-8 object-contain"
+            />
+            <h1 className="text-base leading-tight font-bold text-foreground">
+              Logbook Magang
+            </h1>
           </div>
-          <div className="ms-auto flex items-center gap-2">
+          <div className="ms-auto flex items-center gap-2.5">
+            {/* Indikator Status Auto-Save */}
+            <div className="hidden items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 text-[11px] sm:flex">
+              {isSaving ? (
+                <span className="flex items-center gap-1.5 text-primary">
+                  <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+                  Menyimpan…
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-emerald-600 font-medium">
+                  <Check className="size-3" />
+                  Tersimpan otomatis
+                </span>
+              )}
+            </div>
+
             <code className="hidden max-w-64 truncate rounded-md bg-muted px-2 py-1 font-mono text-[11px] xl:block">
               {filename}
             </code>
@@ -497,7 +515,7 @@ export default function Page() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+      <main className="flex-1 mx-auto max-w-7xl w-full px-4 py-6 sm:px-6">
         {/* Switcher Bulan 2026 & Tab Minggu Otomatis */}
         <div className="mb-6">
           <WeekSwitcher
@@ -506,8 +524,6 @@ export default function Page() {
             selectedMonth={selectedMonth}
             onSelectMonth={handleSelectMonth}
             onSelectWeek={handleSelectWeek}
-            onDownloadMonth={handleExportMonth}
-            isDownloadingMonth={exporting === "month"}
           />
         </div>
 
@@ -530,6 +546,15 @@ export default function Page() {
           </section>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border/60 bg-background/60 py-4 text-center">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <p className="text-xs font-medium text-muted-foreground">
+            rizalabrar
+          </p>
+        </div>
+      </footer>
 
       {/* Modal Import Teks / File */}
       <LogbookImportModal
