@@ -98,18 +98,13 @@ export function getSavedWeeks(): LogbookWeek[] {
 }
 
 /**
- * Menyimpan data minggu secara efisien:
- * Hanya menyimpan minggu yang berisi kegiatan / dimodifikasi atau minggu yang sedang aktif.
- * Mengurangi beban penyimpanan browser hingga 80-90%.
+ * Menyimpan seluruh data minggu yang aktif/terbuka ke localStorage
+ * sehingga seluruh tab minggu pada bulan yang dipilih tetap utuh dan lengkap saat reload.
  */
 export function saveWeeks(weeks: LogbookWeek[], activeWeekId?: string): void {
   if (typeof window === "undefined") return;
   try {
-    const currentActiveId = activeWeekId || getSavedActiveWeekId();
-    const compactWeeks = weeks.filter(
-      (w) => isWeekModified(w) || w.id === currentActiveId,
-    );
-    localStorage.setItem(STORAGE_WEEKS_KEY, JSON.stringify(compactWeeks));
+    localStorage.setItem(STORAGE_WEEKS_KEY, JSON.stringify(weeks));
   } catch (err) {
     console.warn("Gagal menyimpan data minggu ke localStorage:", err);
   }
@@ -498,4 +493,36 @@ export function initWeeksForMonth(
   return result;
 }
 
+export function getCurrentMonthValue(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const val = `${y}-${m}`;
+  const found = AVAILABLE_MONTHS.find((item) => item.value === val);
+  return found ? found.value : "2026-09";
+}
 
+export function isCurrentCalendarWeek(
+  week: LogbookWeek,
+  referenceDate = new Date(),
+): boolean {
+  if (!week.activities || week.activities.length === 0) return false;
+
+  const dates = week.activities
+    .map((a) => parseIndonesianDate(a.hariTanggal))
+    .filter((d): d is Date => d !== null);
+
+  if (dates.length === 0) return false;
+
+  const firstDate = new Date(dates[0]);
+  firstDate.setHours(0, 0, 0, 0);
+
+  const lastDate = new Date(dates[dates.length - 1]);
+  // Jika hari terakhir adalah hari kerja Jumat (5), bentangkan hingga hari Minggu (tambah 2 hari)
+  // agar pengguna yang mengakses logbook di hari Sabtu/Minggu tetap melihat badge "Minggu Ini"
+  if (lastDate.getDay() === 5) {
+    lastDate.setDate(lastDate.getDate() + 2);
+  }
+  lastDate.setHours(23, 59, 59, 999);
+
+  return referenceDate >= firstDate && referenceDate <= lastDate;
+}

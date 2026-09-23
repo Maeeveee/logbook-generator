@@ -22,11 +22,13 @@ import {
   clearSavedWeeks,
   createActivity,
   defaultLogbook,
+  getCurrentMonthValue,
   getSavedActiveWeekId,
   getSavedProfile,
   getSavedWeeks,
   getWorkdaysForMonthWeek,
   initWeeksForMonth,
+  isCurrentCalendarWeek,
   logbookFilename,
   monthlyLogbookFilename,
   saveActiveWeekId,
@@ -89,19 +91,32 @@ export default function Page() {
           }
         : {};
 
-    // Tentukan bulan awal (default September 2026)
-    const initialMonth = "2026-09";
-    setSelectedMonth(initialMonth);
-
-    let loadedWeeks = getSavedWeeks();
-    // Inisialisasi minggu-minggu untuk bulan September 2026 jika belum ada
-    loadedWeeks = initWeeksForMonth(initialMonth, loadedWeeks);
-
+    // Tentukan bulan awal (prioritaskan bulan aktif sebelumnya atau bulan kalender saat ini)
+    const currentMonthVal = getCurrentMonthValue();
     const savedActiveId = getSavedActiveWeekId();
+    let loadedWeeks = getSavedWeeks();
+
+    let targetMonth = currentMonthVal;
+    const existingActive = loadedWeeks.find((w) => w.id === savedActiveId);
+    if (existingActive && existingActive.month) {
+      targetMonth = existingActive.month;
+    }
+
+    setSelectedMonth(targetMonth);
+
+    // Inisialisasi seluruh minggu untuk bulan terpilih agar selalu lengkap (misal 5 minggu, bukan hanya 1)
+    loadedWeeks = initWeeksForMonth(targetMonth, loadedWeeks);
+
     let activeWeek = loadedWeeks.find((w) => w.id === savedActiveId);
-    if (!activeWeek) {
+    if (!activeWeek || activeWeek.month !== targetMonth) {
+      // Prioritaskan mencari minggu yang merupakan "Minggu Ini" di bulan ini
+      const thisCalendarWeek = loadedWeeks.find(
+        (w) => w.month === targetMonth && isCurrentCalendarWeek(w),
+      );
       activeWeek =
-        loadedWeeks.find((w) => w.month === initialMonth) || loadedWeeks[0];
+        thisCalendarWeek ||
+        loadedWeeks.find((w) => w.month === targetMonth) ||
+        loadedWeeks[0];
     }
 
     const initialActiveId = activeWeek.id;
@@ -336,11 +351,12 @@ export default function Page() {
   const handleResetSemua = () => {
     clearSavedProfile();
     clearSavedWeeks();
-    const initialMonth = "2026-09";
-    const newWeeks = initWeeksForMonth(initialMonth, []);
-    const firstWeek = newWeeks[0];
+    const currentMonthVal = getCurrentMonthValue();
+    const newWeeks = initWeeksForMonth(currentMonthVal, []);
+    const thisCalendarWeek = newWeeks.find((w) => isCurrentCalendarWeek(w));
+    const firstWeek = thisCalendarWeek || newWeeks[0];
 
-    setSelectedMonth(initialMonth);
+    setSelectedMonth(currentMonthVal);
     setWeeks(newWeeks);
     setActiveWeekId(firstWeek.id);
     setData({

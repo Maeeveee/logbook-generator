@@ -1,10 +1,10 @@
 "use client";
 
-import { CalendarDays, Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CalendarDays } from "lucide-react";
 import {
   AVAILABLE_MONTHS,
   getWeekDateRangeSummary,
+  isCurrentCalendarWeek,
   type LogbookWeek,
 } from "@/lib/logbook";
 import { cn } from "@/lib/utils";
@@ -29,15 +29,21 @@ export function WeekSwitcher({
     .filter((w) => w.month === selectedMonth)
     .sort((a, b) => a.weekNumber - b.weekNumber);
 
+  const currentCalendarWeek = currentMonthWeeks.find((w) =>
+    isCurrentCalendarWeek(w),
+  );
+
   return (
     <div className="rounded-xl border bg-card p-3.5 shadow-2xs">
-      {/* Header: Label & Dropdown Pilihan Bulan */}
+      {/* Header: Label, Indikator Minggu Ini & Dropdown Pilihan Bulan */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 pb-3">
-        <div className="flex items-center gap-2">
-          <CalendarDays className="size-4 text-primary" />
-          <span className="text-xs font-semibold text-foreground">
-            Logbook Mingguan
-          </span>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="size-4 text-primary" />
+            <span className="text-xs font-semibold text-foreground">
+              Logbook Mingguan
+            </span>
+          </div>
         </div>
 
         {/* Dropdown Bulan */}
@@ -67,6 +73,7 @@ export function WeekSwitcher({
       <div className="flex items-center gap-2 overflow-x-auto pt-3 pb-0.5 scrollbar-thin">
         {currentMonthWeeks.map((week) => {
           const isActive = week.id === activeWeekId;
+          const isCurrent = isCurrentCalendarWeek(week);
           const filledCount = week.activities.filter(
             (a) => a.kegiatan && a.kegiatan.trim() !== "",
           ).length;
@@ -78,16 +85,34 @@ export function WeekSwitcher({
               type="button"
               onClick={() => onSelectWeek(week.id)}
               className={cn(
-                "group flex shrink-0 items-center gap-2.5 rounded-lg border px-3.5 py-2 text-left transition-all",
+                "group relative flex shrink-0 items-center gap-2.5 rounded-lg border px-3.5 py-2 text-left transition-all",
                 isActive
-                  ? "border-primary bg-primary text-primary-foreground shadow-xs"
-                  : "border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                  ? "border-primary bg-primary text-primary-foreground shadow-xs font-semibold"
+                  : isCurrent
+                    ? "border-primary/50 bg-primary/5 text-foreground hover:bg-primary/10 shadow-2xs"
+                    : "border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted/70 hover:text-foreground",
               )}
             >
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.5 text-xs font-semibold leading-tight">
                   <span>Minggu {week.weekNumber}</span>
-                  {filledCount > 0 && (
+
+                  {/* Highlight Badge Minggu Ini */}
+                  {isCurrent && (
+                    <span
+                      className={cn(
+                        "rounded px-1.5 py-0.5 text-[9.5px] font-bold tracking-tight uppercase leading-none",
+                        isActive
+                          ? "bg-white text-primary"
+                          : "bg-primary text-primary-foreground",
+                      )}
+                      title="Minggu ini berdasarkan tanggal kalender saat ini"
+                    >
+                      Minggu Ini
+                    </span>
+                  )}
+
+                  {filledCount > 0 && !isCurrent && (
                     <span
                       className={cn(
                         "size-1.5 shrink-0 rounded-full",
@@ -100,10 +125,12 @@ export function WeekSwitcher({
                 {rangeSummary ? (
                   <span
                     className={cn(
-                      "mt-0.5 text-[10.5px] font-normal leading-tight",
+                      "mt-0.5 text-[10.5px] leading-tight",
                       isActive
-                        ? "text-primary-foreground/85"
-                        : "text-muted-foreground",
+                        ? "text-primary-foreground/90 font-normal"
+                        : isCurrent
+                          ? "text-primary font-medium"
+                          : "text-muted-foreground font-normal",
                     )}
                   >
                     {rangeSummary}
